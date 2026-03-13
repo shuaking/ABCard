@@ -297,6 +297,7 @@ class PaymentFlow:
             "billing_details[address][country]": billing.country,
             "billing_details[address][line1]": billing.address_line1,
             "billing_details[address][state]": billing.address_state,
+            "billing_details[address][postal_code]": billing.postal_code,
             "allow_redisplay": "always",
             "guid": fp["guid"],
             "muid": fp["muid"],

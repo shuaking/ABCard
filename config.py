@@ -33,6 +33,7 @@ class BillingInfo:
     currency: str = "JPY"
     address_line1: str = "1-1-1 Shibuya"
     address_state: str = "Tokyo"
+    postal_code: str = "150-0002"
 
 
 @dataclass

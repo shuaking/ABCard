@@ -20,22 +20,22 @@ from logger import ResultStore
 
 OUTPUT_DIR = "test_outputs"
 
-# 国家 → (code, currency, state, address)
+# 国家 → (code, currency, state, address, postal_code)
 COUNTRY_MAP = {
-    "US - 美国": ("US", "USD", "California", "123 Main St"),
-    "DE - 德国": ("DE", "EUR", "Berlin", "Hauptstraße 1"),
-    "JP - 日本": ("JP", "JPY", "Tokyo", "1-1-1 Shibuya"),
-    "GB - 英国": ("GB", "GBP", "London", "10 Downing St"),
-    "FR - 法国": ("FR", "EUR", "Paris", "1 Rue de Rivoli"),
-    "SG - 新加坡": ("SG", "SGD", "Singapore", "1 Raffles Place"),
-    "HK - 香港": ("HK", "HKD", "Hong Kong", "1 Queen's Road"),
-    "KR - 韩国": ("KR", "KRW", "Seoul", "1 Gangnam-daero"),
-    "AU - 澳大利亚": ("AU", "AUD", "NSW", "1 George St"),
-    "CA - 加拿大": ("CA", "CAD", "Ontario", "123 King St"),
-    "NL - 荷兰": ("NL", "EUR", "Amsterdam", "Damrak 1"),
-    "IT - 意大利": ("IT", "EUR", "Rome", "Via Roma 1"),
-    "ES - 西班牙": ("ES", "EUR", "Madrid", "Calle Mayor 1"),
-    "CH - 瑞士": ("CH", "CHF", "Zurich", "Bahnhofstrasse 1"),
+    "US - 美国": ("US", "USD", "California", "123 Main St", "90001"),
+    "DE - 德国": ("DE", "EUR", "Berlin", "Hauptstraße 1", "10115"),
+    "JP - 日本": ("JP", "JPY", "Tokyo", "1-1-1 Shibuya", "150-0002"),
+    "GB - 英国": ("GB", "GBP", "London", "10 Downing St", "SW1A 2AA"),
+    "FR - 法国": ("FR", "EUR", "Paris", "1 Rue de Rivoli", "75001"),
+    "SG - 新加坡": ("SG", "SGD", "Singapore", "1 Raffles Place", "048616"),
+    "HK - 香港": ("HK", "HKD", "Hong Kong", "1 Queen's Road", "000000"),
+    "KR - 韩国": ("KR", "KRW", "Seoul", "1 Gangnam-daero", "06000"),
+    "AU - 澳大利亚": ("AU", "AUD", "NSW", "1 George St", "2000"),
+    "CA - 加拿大": ("CA", "CAD", "Ontario", "123 King St", "M5H 1A1"),
+    "NL - 荷兰": ("NL", "EUR", "Amsterdam", "Damrak 1", "1012 LG"),
+    "IT - 意大利": ("IT", "EUR", "Rome", "Via Roma 1", "00100"),
+    "ES - 西班牙": ("ES", "EUR", "Madrid", "Calle Mayor 1", "28013"),
+    "CH - 瑞士": ("CH", "CHF", "Zurich", "Bahnhofstrasse 1", "8001"),
 }
 
 st.set_page_config(page_title="Auto BindCard", page_icon="💳", layout="wide")
@@ -167,13 +167,14 @@ with cfg_col1:
 with cfg_col2:
     with st.expander("💰 账单地址", expanded=True):
         country_label = st.selectbox("国家", list(COUNTRY_MAP.keys()), index=0)
-        country_code, default_currency, default_state, default_addr = COUNTRY_MAP[country_label]
+        country_code, default_currency, default_state, default_addr, default_zip = COUNTRY_MAP[country_label]
         bc1, bc2 = st.columns(2)
         billing_name = bc1.text_input("姓名", value="Test User")
         currency = bc2.text_input("货币", value=default_currency)
-        bc3, bc4 = st.columns(2)
+        bc3, bc4, bc5 = st.columns(3)
         address_line1 = bc3.text_input("地址", value=default_addr)
         address_state = bc4.text_input("州/省", value=default_state)
+        postal_code = bc5.text_input("邮编", value=default_zip)
 
 if do_payment:
     with st.expander("💳 信用卡 ⚠️ Live 模式 - 真实扣款", expanded=True):
@@ -283,7 +284,8 @@ with tab_run:
             cfg.team_plan.seat_quantity = seat_quantity
             cfg.team_plan.promo_campaign_id = promo_campaign
             cfg.billing = BillingInfo(name=billing_name, email="", country=country_code, currency=currency,
-                                      address_line1=address_line1, address_state=address_state)
+                                      address_line1=address_line1, address_state=address_state,
+                                      postal_code=postal_code)
             if do_payment:
                 cfg.card = CardInfo(number=card_number, cvc=card_cvc, exp_month=exp_month, exp_year=exp_year)
 
