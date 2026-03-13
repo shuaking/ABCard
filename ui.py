@@ -237,6 +237,35 @@ if do_payment:
         if _tn and _tn.startswith("4"):
             st.caption("⚠️ Live 模式下所有测试卡都会被拒绝，仅用于验证流程")
 
+# 跳过注册时可复用已有凭证
+use_existing_creds = st.checkbox("🔐 使用已有凭证（跳过注册）", value=not do_register)
+cred_email = ""
+cred_session_token = ""
+cred_access_token = ""
+cred_device_id = ""
+if use_existing_creds:
+    with st.expander("🔐 已有凭证配置", expanded=not do_register):
+        cred_files = []
+        if os.path.exists(OUTPUT_DIR):
+            cred_files = sorted(
+                [f for f in os.listdir(OUTPUT_DIR) if f.startswith("credentials_") and f.endswith(".json")],
+                reverse=True,
+            )
+
+        selected_cred = st.selectbox("凭证文件", ["手动输入"] + cred_files, index=1 if cred_files else 0)
+        loaded = {}
+        if selected_cred != "手动输入":
+            try:
+                with open(os.path.join(OUTPUT_DIR, selected_cred), "r") as f:
+                    loaded = json.load(f)
+            except Exception:
+                loaded = {}
+
+        cred_email = st.text_input("邮箱", value=loaded.get("email", ""))
+        cred_session_token = st.text_input("session_token", value=loaded.get("session_token", ""), type="password")
+        cred_access_token = st.text_input("access_token", value=loaded.get("access_token", ""), type="password")
+        cred_device_id = st.text_input("device_id", value=loaded.get("device_id", ""))
+
 st.divider()
 
 # ════════════════════════════════════════
@@ -339,6 +368,19 @@ with tab_run:
                 store.append_credentials_csv(auth_result.to_dict())
                 pull_captured_logs()
                 log_area.code("\n".join(st.session_state.log_buffer[-60:]), language="log")
+            elif do_checkout and use_existing_creds:
+                # 跳过注册，直接使用已有凭证
+                if not cred_session_token or not cred_access_token:
+                    raise RuntimeError("跳过注册时必须提供 session_token 和 access_token")
+                af = AuthFlow(cfg)
+                auth_result = af.from_existing_credentials(
+                    session_token=cred_session_token,
+                    access_token=cred_access_token,
+                    device_id=cred_device_id,
+                )
+                auth_result.email = cred_email or "unknown@example.com"
+                rd["email"] = auth_result.email
+                rd["steps"]["register"] = "⏭️"
 
             # ── Checkout ──
             if do_checkout:
