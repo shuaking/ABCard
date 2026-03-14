@@ -1084,6 +1084,7 @@ class BrowserPayment:
         billing_zip: str,
         billing_line1: str = "",
         billing_email: str = "",
+        billing_currency: str = "",
         chatgpt_proxy: str = None,
         timeout: int = 120,
     ) -> dict:
@@ -1093,12 +1094,21 @@ class BrowserPayment:
         # Step 1: API 创建 checkout session
         logger.info("=" * 50)
         logger.info("[Full Flow] Step 1: 创建 Checkout Session...")
+        # 自动推断 currency (如果未指定)
+        if not billing_currency:
+            _country_currency = {
+                "US": "USD", "GB": "GBP", "DE": "EUR", "FR": "EUR", "JP": "JPY",
+                "SG": "SGD", "HK": "HKD", "KR": "KRW", "AU": "AUD", "CA": "CAD",
+                "NL": "EUR", "IT": "EUR", "ES": "EUR", "CH": "CHF",
+            }
+            billing_currency = _country_currency.get(billing_country, "USD")
         checkout_data = self.create_checkout_session(
             session_token=session_token,
             access_token=access_token,
             device_id=device_id,
             chatgpt_proxy=chatgpt_proxy,
             billing_country=billing_country,
+            billing_currency=billing_currency,
         )
 
         cs_id = checkout_data.get("checkout_session_id", "")

@@ -26,112 +26,216 @@ import re as _re
 
 # 国家名/后缀 → (country_code, currency) 映射
 _COUNTRY_ALIAS = {
-    "UK": ("GB", "GBP"), "GB": ("GB", "GBP"), "England": ("GB", "GBP"), "United Kingdom": ("GB", "GBP"),
-    "US": ("US", "USD"), "USA": ("US", "USD"), "United States": ("US", "USD"),
-    "DE": ("DE", "EUR"), "Germany": ("DE", "EUR"),
-    "JP": ("JP", "JPY"), "Japan": ("JP", "JPY"),
-    "FR": ("FR", "EUR"), "France": ("FR", "EUR"),
-    "SG": ("SG", "SGD"), "Singapore": ("SG", "SGD"),
-    "HK": ("HK", "HKD"), "Hong Kong": ("HK", "HKD"),
-    "KR": ("KR", "KRW"), "Korea": ("KR", "KRW"),
-    "AU": ("AU", "AUD"), "Australia": ("AU", "AUD"),
-    "CA": ("CA", "CAD"), "Canada": ("CA", "CAD"),
-    "NL": ("NL", "EUR"), "Netherlands": ("NL", "EUR"),
-    "IT": ("IT", "EUR"), "Italy": ("IT", "EUR"),
-    "ES": ("ES", "EUR"), "Spain": ("ES", "EUR"),
-    "CH": ("CH", "CHF"), "Switzerland": ("CH", "CHF"),
+    "UK": ("GB", "GBP"), "GB": ("GB", "GBP"), "England": ("GB", "GBP"), "United Kingdom": ("GB", "GBP"), "英国": ("GB", "GBP"),
+    "US": ("US", "USD"), "USA": ("US", "USD"), "United States": ("US", "USD"), "美国": ("US", "USD"),
+    "DE": ("DE", "EUR"), "Germany": ("DE", "EUR"), "德国": ("DE", "EUR"),
+    "JP": ("JP", "JPY"), "Japan": ("JP", "JPY"), "日本": ("JP", "JPY"),
+    "FR": ("FR", "EUR"), "France": ("FR", "EUR"), "法国": ("FR", "EUR"),
+    "SG": ("SG", "SGD"), "Singapore": ("SG", "SGD"), "新加坡": ("SG", "SGD"),
+    "HK": ("HK", "HKD"), "Hong Kong": ("HK", "HKD"), "香港": ("HK", "HKD"),
+    "KR": ("KR", "KRW"), "Korea": ("KR", "KRW"), "韩国": ("KR", "KRW"),
+    "AU": ("AU", "AUD"), "Australia": ("AU", "AUD"), "澳大利亚": ("AU", "AUD"),
+    "CA": ("CA", "CAD"), "Canada": ("CA", "CAD"), "加拿大": ("CA", "CAD"),
+    "NL": ("NL", "EUR"), "Netherlands": ("NL", "EUR"), "荷兰": ("NL", "EUR"),
+    "IT": ("IT", "EUR"), "Italy": ("IT", "EUR"), "意大利": ("IT", "EUR"),
+    "ES": ("ES", "EUR"), "Spain": ("ES", "EUR"), "西班牙": ("ES", "EUR"),
+    "CH": ("CH", "CHF"), "Switzerland": ("CH", "CHF"), "瑞士": ("CH", "CHF"),
 }
 
 
 def _parse_card_text(text: str) -> dict:
-    """从粘贴文本中解析卡号、有效期、CVV、账单地址"""
+    """从粘贴文本中解析卡号、有效期、CVV、账单地址。
+    支持两种格式:
+    1) 纯文本: 卡号一行、MM/YY一行、CVV一行、账单地址一行
+    2) 键值对: 卡号: xxx / 有效期: MMYY / CVV: xxx / 地址: xxx / 城市: xxx / 邮编: xxx / 国家: xxx
+    """
     result = {}
-    lines = [l.strip() for l in text.strip().splitlines()]
+    lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
 
-    # 卡号: 连续 13-19 位数字 (可有空格)
+    # 构建键值映射 (支持 "键: 值" 和 "键：值")
+    kv = {}
     for line in lines:
-        digits_only = line.replace(" ", "").replace("-", "")
-        if digits_only.isdigit() and 13 <= len(digits_only) <= 19:
-            result["card_number"] = digits_only
-            break
-
-    # 有效期: MM/YY 或 MM/YYYY
-    for line in lines:
-        m = _re.search(r'\b(0[1-9]|1[0-2])\s*/\s*(\d{2,4})\b', line)
+        m = _re.match(r'^(.+?)\s*[:：]\s*(.+)$', line)
         if m:
-            result["exp_month"] = m.group(1)
-            yr = m.group(2)
-            if len(yr) == 2:
-                yr = "20" + yr
-            result["exp_year"] = yr
-            break
+            kv[m.group(1).strip().lower()] = m.group(2).strip()
 
-    # CVV: "CVV" 后面或下一行的 3-4 位数字
-    for i, line in enumerate(lines):
-        if _re.search(r'(?i)\b(?:cvv|cvc|安全码)\b', line):
-            m = _re.search(r'\b(\d{3,4})\b', line)
+    # ── 卡号 ──
+    # 从键值对获取
+    for k in ("卡号", "card number", "card", "card_number"):
+        if k in kv:
+            digits = kv[k].replace(" ", "").replace("-", "")
+            if digits.isdigit() and 13 <= len(digits) <= 19:
+                result["card_number"] = digits
+                break
+    # 回退: 纯数字行
+    if "card_number" not in result:
+        for line in lines:
+            digits_only = line.replace(" ", "").replace("-", "")
+            if digits_only.isdigit() and 13 <= len(digits_only) <= 19:
+                result["card_number"] = digits_only
+                break
+
+    # ── 有效期 ──
+    # 从键值对获取 (支持 MMYY, MM/YY, MM/YYYY)
+    for k in ("有效期", "exp", "expiry", "expiration", "exp_date"):
+        if k in kv:
+            val = kv[k]
+            # MM/YY 或 MM/YYYY
+            m = _re.search(r'(0[1-9]|1[0-2])\s*/\s*(\d{2,4})', val)
+            if m:
+                result["exp_month"] = m.group(1)
+                yr = m.group(2)
+                if len(yr) == 2:
+                    yr = "20" + yr
+                result["exp_year"] = yr
+                break
+            # MMYY 或 MMYYYY (无分隔符)
+            m = _re.search(r'^(0[1-9]|1[0-2])(\d{2,4})$', val.strip())
+            if m:
+                result["exp_month"] = m.group(1)
+                yr = m.group(2)
+                if len(yr) == 2:
+                    yr = "20" + yr
+                result["exp_year"] = yr
+                break
+    # 回退: 逐行寻找 MM/YY
+    if "exp_month" not in result:
+        for line in lines:
+            m = _re.search(r'\b(0[1-9]|1[0-2])\s*/\s*(\d{2,4})\b', line)
+            if m:
+                result["exp_month"] = m.group(1)
+                yr = m.group(2)
+                if len(yr) == 2:
+                    yr = "20" + yr
+                result["exp_year"] = yr
+                break
+
+    # ── CVV ──
+    for k in ("cvv", "cvc", "安全码"):
+        if k in kv:
+            m = _re.search(r'\b(\d{3,4})\b', kv[k])
             if m:
                 result["cvv"] = m.group(1)
-            elif i + 1 < len(lines):
-                m2 = _re.search(r'\b(\d{3,4})\b', lines[i + 1])
-                if m2:
-                    result["cvv"] = m2.group(1)
+                break
+    if "cvv" not in result:
+        for i, line in enumerate(lines):
+            if _re.search(r'(?i)\b(?:cvv|cvc|安全码)\b', line):
+                m = _re.search(r'\b(\d{3,4})\b', line)
+                if m:
+                    result["cvv"] = m.group(1)
+                elif i + 1 < len(lines):
+                    m2 = _re.search(r'\b(\d{3,4})\b', lines[i + 1])
+                    if m2:
+                        result["cvv"] = m2.group(1)
+                break
+
+    # ── 地址: 键值对模式 (地址/城市/州/邮编/国家 分字段) ──
+    kv_addr = None
+    for k in ("地址", "address", "address_line1"):
+        if k in kv:
+            kv_addr = kv[k]
+            break
+    kv_city = None
+    for k in ("城市", "city"):
+        if k in kv:
+            kv_city = kv[k]
+            break
+    kv_state = None
+    for k in ("州", "state", "省"):
+        if k in kv:
+            kv_state = kv[k]
+            break
+    kv_zip = None
+    for k in ("邮编", "postal_code", "zip", "zipcode", "zip_code"):
+        if k in kv:
+            kv_zip = kv[k]
+            break
+    kv_country = None
+    for k in ("国家", "country", "地区"):
+        if k in kv:
+            kv_country = kv[k]
             break
 
-    # 账单地址: "账单地址" 或 "billing address" 后面的地址行
-    addr_text = ""
-    for i, line in enumerate(lines):
-        if _re.search(r'(?i)账单地址|billing\s*address', line):
-            # 地址可能在同一行冒号后、或后续行
-            after = _re.sub(r'(?i)^.*?(账单地址|billing\s*address)\s*[:：]?\s*', '', line).strip()
-            if after and len(after) > 3:
-                addr_text = after
-            else:
-                # 跳过空行和"复制"标签，找到实际地址
-                for j in range(i + 1, min(i + 5, len(lines))):
-                    candidate = lines[j]
-                    if candidate and candidate not in ("复制", "copy", ""):
-                        addr_text = candidate
+    if kv_addr:
+        result["address_line1"] = kv_addr
+        if kv_city:
+            result["address_state"] = kv_state or kv_city
+        elif kv_state:
+            result["address_state"] = kv_state
+        if kv_zip:
+            result["postal_code"] = kv_zip
+        if kv_country:
+            ci = _COUNTRY_ALIAS.get(kv_country)
+            if ci:
+                result["country_code"] = ci[0]
+                result["currency"] = ci[1]
+        # 构建 raw_address
+        parts = [kv_addr]
+        if kv_city:
+            parts.append(kv_city)
+        if kv_state:
+            parts.append(kv_state)
+        if kv_zip:
+            parts.append(kv_zip)
+        if kv_country:
+            parts.append(kv_country)
+        result["raw_address"] = ", ".join(parts)
+
+    # ── 地址: 回退 "账单地址" / "billing address" 单行模式 ──
+    if "address_line1" not in result:
+        addr_text = ""
+        for i, line in enumerate(lines):
+            if _re.search(r'(?i)账单地址|billing\s*address', line):
+                after = _re.sub(r'(?i)^.*?(账单地址|billing\s*address)\s*[:：]?\s*', '', line).strip()
+                if after and len(after) > 3:
+                    addr_text = after
+                else:
+                    for j in range(i + 1, min(i + 5, len(lines))):
+                        candidate = lines[j]
+                        if candidate and candidate not in ("复制", "copy", ""):
+                            addr_text = candidate
+                            break
+                break
+
+        if addr_text:
+            result["raw_address"] = addr_text
+            parts = [p.strip() for p in addr_text.split(",")]
+            if len(parts) >= 2:
+                last = parts[-1].strip()
+                country_info = _COUNTRY_ALIAS.get(last)
+                if country_info:
+                    result["country_code"] = country_info[0]
+                    result["currency"] = country_info[1]
+                    parts = parts[:-1]
+
+                for idx, p in enumerate(parts):
+                    if _re.search(r'\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b', p.strip(), _re.IGNORECASE):
+                        result["postal_code"] = p.strip()
+                        parts.pop(idx)
                         break
+                    elif _re.search(r'\b\d{5}(-\d{4})?\b', p.strip()):
+                        result["postal_code"] = p.strip()
+                        parts.pop(idx)
+                        break
+                    elif _re.search(r'\b\d{3}-\d{4}\b', p.strip()):
+                        result["postal_code"] = p.strip()
+                        parts.pop(idx)
+                        break
+
+                if len(parts) == 1:
+                    result["address_line1"] = parts[0]
+                elif len(parts) == 2:
+                    result["address_line1"] = parts[0]
+                    result["address_state"] = parts[1]
+                elif len(parts) >= 3:
+                    result["address_line1"] = parts[0]
+                    result["address_state"] = parts[1]
+
+    # ── 姓名 ──
+    for k in ("姓名", "name", "cardholder", "持卡人"):
+        if k in kv:
+            result["billing_name"] = kv[k]
             break
-
-    if addr_text:
-        result["raw_address"] = addr_text
-        parts = [p.strip() for p in addr_text.split(",")]
-        if len(parts) >= 2:
-            # 尝试从最后一段获取国家
-            last = parts[-1].strip()
-            country_info = _COUNTRY_ALIAS.get(last)
-            if country_info:
-                result["country_code"] = country_info[0]
-                result["currency"] = country_info[1]
-                parts = parts[:-1]
-
-            # 尝试提取邮编 (支持英式如 N2 8EY、美式如 90001、日式如 150-0002)
-            for idx, p in enumerate(parts):
-                if _re.search(r'\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b', p.strip(), _re.IGNORECASE):
-                    result["postal_code"] = p.strip()
-                    parts.pop(idx)
-                    break
-                elif _re.search(r'\b\d{5}(-\d{4})?\b', p.strip()):
-                    result["postal_code"] = p.strip()
-                    parts.pop(idx)
-                    break
-                elif _re.search(r'\b\d{3}-\d{4}\b', p.strip()):
-                    result["postal_code"] = p.strip()
-                    parts.pop(idx)
-                    break
-
-            # 解析: 第一段=街道, 第二段=城市(州/省), 后续合并
-            if len(parts) == 1:
-                result["address_line1"] = parts[0]
-            elif len(parts) == 2:
-                result["address_line1"] = parts[0]
-                result["address_state"] = parts[1]
-            elif len(parts) >= 3:
-                # 例: Langley House, London, England → line1=Langley House, state=London
-                result["address_line1"] = parts[0]
-                result["address_state"] = parts[1]  # 城市作为州/省
 
     return result
 
@@ -277,16 +381,19 @@ _widget_defaults = {
     "w_exp_month": "12",
     "w_exp_year": "2030",
     "w_proxy": "http://172.25.16.1:7897",
+    "w_billing_name": "Test User",
 }
 for _dk, _dv in _widget_defaults.items():
     if _dk not in st.session_state:
         st.session_state[_dk] = _dv
 
 # ── 延迟的解析结果应用 (必须在 widget 渲染之前) ──
+_parse_just_applied = False
 if "_pending_parse" in st.session_state:
     _pp = st.session_state.pop("_pending_parse")
     for _pk, _pv in _pp.items():
         st.session_state[_pk] = _pv
+    _parse_just_applied = True
 
 
 # ════════════════════════════════════════
@@ -373,16 +480,16 @@ with cfg_col2:
         # 如果有解析出的国家，自动选择对应国家
         country_label = st.selectbox("国家", list(COUNTRY_MAP.keys()), key="w_country")
         country_code, default_currency, default_state, default_addr, default_zip = COUNTRY_MAP[country_label]
-        # 当国家变更时，更新地址默认值
+        # 当国家变更时，更新地址默认值 (但不覆盖刚解析的值)
         _prev_country = st.session_state.get("_prev_country", "")
-        if _prev_country and _prev_country != country_label:
+        if _prev_country and _prev_country != country_label and not _parse_just_applied:
             st.session_state["w_currency"] = default_currency
             st.session_state["w_address_line1"] = default_addr
             st.session_state["w_address_state"] = default_state
             st.session_state["w_postal_code"] = default_zip
         st.session_state["_prev_country"] = country_label
         bc1, bc2 = st.columns(2)
-        billing_name = bc1.text_input("姓名", value="Test User", key="w_billing_name")
+        billing_name = bc1.text_input("姓名", key="w_billing_name")
         if "w_currency" not in st.session_state:
             st.session_state["w_currency"] = default_currency
         currency = bc2.text_input("货币", key="w_currency")
@@ -402,7 +509,7 @@ if do_payment:
         paste_text = st.text_area(
             "粘贴卡片/账单文本",
             height=150,
-            placeholder="粘贴包含卡号、有效期、CVV、账单地址的文本，自动识别填充...\n\n例:\n4462 2200 0462 4356\n03/29\nCVV 173\n账单地址\nLangley House, London, England, N2 8EY, UK",
+            placeholder="支持两种格式:\n\n格式1 (键值对):\n卡号: 5349336326843395\n有效期: 0332\nCVV: 667\n姓名: Victoria Peterson\n地址: 863 Potosi Street\n城市: Farmington\n州: MO\n邮编: 63640\n国家: United States\n\n格式2 (纯文本):\n4462 2200 0462 4356\n03/29\nCVV 173\n账单地址\nLangley House, London, England, N2 8EY, UK",
             key="paste_card_text",
         )
         if paste_text and st.button("🔍 识别并填充", key="parse_btn"):
@@ -431,6 +538,8 @@ if do_payment:
                         break
             if parsed.get("currency"):
                 pending["w_currency"] = parsed["currency"]
+            if parsed.get("billing_name"):
+                pending["w_billing_name"] = parsed["billing_name"]
             st.session_state["_pending_parse"] = pending
             # 展示识别结果
             filled = []
@@ -446,6 +555,8 @@ if do_payment:
                 filled.append(f"国家: {parsed['country_code']}")
             if parsed.get("postal_code"):
                 filled.append(f"邮编: {parsed['postal_code']}")
+            if parsed.get("billing_name"):
+                filled.append(f"姓名: {parsed['billing_name']}")
             if filled:
                 st.success("✅ 已识别: " + " | ".join(filled))
             else:
@@ -679,6 +790,7 @@ with tab_run:
                         billing_zip=postal_code,
                         billing_line1=address_line1,
                         billing_email=auth_result.email,
+                        billing_currency=currency,
                         chatgpt_proxy=cfg.proxy,
                         timeout=120,
                     )

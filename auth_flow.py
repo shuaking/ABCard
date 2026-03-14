@@ -258,7 +258,9 @@ class AuthFlow:
             },
             timeout=30,
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            logger.error(f"注册失败: {resp.status_code} - {resp.text[:500]}")
+            raise RuntimeError(f"注册失败: HTTP {resp.status_code} - {resp.text[:300]}")
         logger.info("注册邮箱已提交")
 
     # ── Step 7: 发送 OTP ──
