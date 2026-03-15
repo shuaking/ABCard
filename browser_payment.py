@@ -1513,16 +1513,18 @@ class BrowserPayment:
 
                 # hCaptcha 检测与点击
                 hcaptcha_clicked = False
+                hcaptcha_click_count = 0
                 for check_round in range(24):  # 最多 120 秒
                     time.sleep(5)
 
-                    # 检查是否有 hCaptcha
-                    if not hcaptcha_clicked:
+                    # 持续检测 hCaptcha (多次尝试点击)
+                    if hcaptcha_click_count < 3:
                         try:
                             clicked = self._try_click_hcaptcha(page)
                             if clicked:
+                                hcaptcha_click_count += 1
                                 hcaptcha_clicked = True
-                                logger.info("[Checkout] hCaptcha 已点击")
+                                logger.info(f"[Checkout] hCaptcha 已点击 (第{hcaptcha_click_count}次)")
                         except Exception:
                             pass
 
